@@ -1,4 +1,4 @@
-# gopygo
+## gopygo
 
 gopygo translates a typed subset of Python 3 into stdlib-only Go.
 The output reads like Go you would write by hand. Every value in
@@ -12,33 +12,33 @@ project is built the way it is.
 
 ---
 
-## Table of contents
+### Table of contents
 
-1. [Motivation](#1-motivation)
-2. [What gopygo covers](#2-what-gopygo-covers)
-3. [Quick start](#3-quick-start)
-4. [A worked example](#4-a-worked-example)
-5. [Architecture overview](#5-architecture-overview)
-6. [The pipeline, stage by stage](#6-the-pipeline-stage-by-stage)
-   1. [Stage 1: parsing with CPython](#61-stage-1-parsing-with-cpython)
-   2. [Stage 2: the type lattice](#62-stage-2-the-type-lattice)
-   3. [Stage 3: fused inference and emission](#63-stage-3-fused-inference-and-emission)
-   4. [Stage 4: formatting and optional execution](#64-stage-4-formatting-and-optional-execution)
-7. [The supported subset](#7-the-supported-subset)
-8. [Emission reference](#8-emission-reference)
-9. [Diagnostics](#9-diagnostics)
-10. [Testing philosophy](#10-testing-philosophy)
-11. [Design decisions and trade-offs](#11-design-decisions-and-trade-offs)
-12. [What is missing and why](#12-what-is-missing-and-why)
-13. [Extending gopygo](#13-extending-gopygo)
-14. [Project layout](#14-project-layout)
-15. [FAQ](#15-faq)
-16. [A short history of the project](#16-a-short-history-of-the-project)
-17. [License](#17-license)
+1. [Motivation](#motivation)
+2. [What gopygo covers](#what-gopygo-covers)
+3. [Quick start](#quick-start)
+4. [A worked example](#a-worked-example)
+5. [Architecture overview](#architecture-overview)
+6. [The pipeline, stage by stage](#the-pipeline-stage-by-stage)
+   1. [Stage 1: parsing with CPython](#stage-1-parsing-with-cpython)
+   2. [Stage 2: the type lattice](#stage-2-the-type-lattice)
+   3. [Stage 3: fused inference and emission](#stage-3-fused-inference-and-emission)
+   4. [Stage 4: formatting and optional execution](#stage-4-formatting-and-optional-execution)
+7. [The supported subset](#the-supported-subset)
+8. [Emission reference](#emission-reference)
+9. [Diagnostics](#diagnostics)
+10. [Testing philosophy](#testing-philosophy)
+11. [Design decisions and trade-offs](#design-decisions-and-trade-offs)
+12. [What is missing and why](#what-is-missing-and-why)
+13. [Extending gopygo](#extending-gopygo)
+14. [Project layout](#project-layout)
+15. [FAQ](#faq)
+16. [A short history of the project](#a-short-history-of-the-project)
+17. [License](#license)
 
 ---
 
-## 1. Motivation
+### Motivation
 
 Python-to-Go tools usually take one of two paths. The first treats Go
 as an interpreter target: every Python value becomes a boxed struct
@@ -67,7 +67,7 @@ In practice the rule is less harsh than it sounds. Python code
 already written with `mypy` in the loop tends to fit as-is.
 Everything else stays in Python.
 
-## 2. What gopygo covers
+### What gopygo covers
 
 gopygo is a source-to-source compiler: a frontend that reuses
 CPython's `ast` module, a small type system, and a single emission
@@ -86,7 +86,7 @@ Think of it the way you think of `mypyc` or `shedskin`: a
 restricted dialect that trades expressivity for guarantees on the
 output.
 
-## 3. Quick start
+### Quick start
 
 You need Go 1.26 and Python 3.14 on your `PATH`.
 
@@ -120,7 +120,7 @@ the emitted Go to confirm every fixture imports only stdlib
 packages, which is the guard-rail that keeps the stdlib-only
 promise honest.
 
-## 4. A worked example
+### A worked example
 
 Start with a tiny Python file:
 
@@ -201,7 +201,7 @@ because Python prints `True` and `3.0` differently from Go's
 A reader coming cold to this file needs zero gopygo context. It
 reads as Go.
 
-## 5. Architecture overview
+### Architecture overview
 
 The project has four packages and a CLI:
 
@@ -233,9 +233,9 @@ formatted Go source
 Each stage has a single job and a single entry point. Cross-cutting
 machinery stays out by design.
 
-## 6. The pipeline, stage by stage
+### The pipeline, stage by stage
 
-### 6.1 Stage 1: parsing with CPython
+#### Stage 1: parsing with CPython
 
 gopygo reuses the parser that Python already ships. The `pyast`
 package embeds a tiny Python helper script, writes it to a temp
@@ -266,7 +266,7 @@ accessors for fields (`Str`, `Child`, `Children`, `Raw`). The rest of
 gopygo talks to the AST through this interface; it never cares about
 the JSON shape directly.
 
-### 6.2 Stage 2: the type lattice
+#### Stage 2: the type lattice
 
 The `types` package defines the set of types gopygo can reason about.
 
@@ -310,7 +310,7 @@ from Python's `typing` module. Inference stays concrete, and when
 it runs out of evidence it stops with a source-located diagnostic
 rather than reaching for `any`.
 
-### 6.3 Stage 3: fused inference and emission
+#### Stage 3: fused inference and emission
 
 The `gen` package is where the real work happens. It walks the AST
 from `Module` downward and, at each node, *simultaneously* infers the
@@ -389,7 +389,7 @@ is emitted once per program, and only when the corresponding builtin
 is actually used. If your program never calls `abs`, the `absInt`
 helper stays out of the output.
 
-### 6.4 Stage 4: formatting and optional execution
+#### Stage 4: formatting and optional execution
 
 The emitter writes raw Go with `fmt.Fprintf`. The CLI runs the result
 through `go/format.Source` before writing it to disk, so the final
@@ -401,9 +401,9 @@ see what gopygo produced, and returns the formatter's error.
 `gopygo run` does the same work but drops the Go into a temp
 directory and shells `go run` on it.
 
-## 7. The supported subset
+### The supported subset
 
-### Top-level structure
+#### Top-level structure
 
 - A module is a sequence of top-level statements.
 - Top-level `def`s are functions with annotated parameters and an
@@ -414,7 +414,7 @@ directory and shells `go run` on it.
   and `raise` are all rejected with a source-located error. They are
   not silently dropped.
 
-### Types in annotations
+#### Types in annotations
 
 - `int`, `float`, `bool`, `str`, `None`, `Any`.
 - `list[T]`, `dict[K, V]`, `tuple[T1, T2, ...]` where each `T` is
@@ -422,7 +422,7 @@ directory and shells `go run` on it.
 - Annotations must be real names; bare string forward references
   stay unsupported for now.
 
-### Expressions
+#### Expressions
 
 - Integer, float, string, bool, and `None` literals.
 - Names (local and module scope).
@@ -446,7 +446,7 @@ directory and shells `go run` on it.
 - List and dict literals. Element types must agree (with numeric
   widening for lists).
 
-### Statements
+#### Statements
 
 - `x = expr`: declares on first use, reassigns thereafter.
 - `x: T = expr` and `x: T`: annotated assignment and declaration.
@@ -461,7 +461,7 @@ directory and shells `go run` on it.
   strings, not runes), and `dict` (iterates keys, like Python).
 - `return`, `break`, `continue`, `pass`.
 
-### Builtins
+#### Builtins
 
 - `print(*args)`: Python-style, via the `pyPrintln` helper.
 - `len(x)`: on `str`, `list`, `dict`. Returns `int64`.
@@ -473,7 +473,7 @@ directory and shells `go run` on it.
 - `bool(x)`: from bool, int, float, or str.
 - `range(...)`: valid only as a `for` iterable.
 
-## 8. Emission reference
+### Emission reference
 
 This section shows, for each Python construct, the Go gopygo emits.
 These are patterns, not guarantees against formatting drift.
@@ -601,7 +601,7 @@ parenthesises around every binary operator so it never has to reason
 about precedence in the generator. `gofmt` is free to drop or keep
 them; in practice the output is readable either way.
 
-## 9. Diagnostics
+### Diagnostics
 
 Every error carries a Python source location. A typical message looks
 like:
@@ -626,7 +626,7 @@ There are four broad error categories:
 Every diagnostic is fatal. A file either compiles cleanly or stops
 at the first problem.
 
-## 10. Testing philosophy
+### Testing philosophy
 
 The test suite is a set of fixtures under `tests/fixtures/`. Each
 fixture is a three-file triplet:
@@ -656,7 +656,7 @@ of what the emitter produces.
 Adding a fixture is cheap by design. Drop three files into
 `tests/fixtures/`, run `UPDATE=1 tests/run.sh`, commit.
 
-## 11. Design decisions and trade-offs
+### Design decisions and trade-offs
 
 **CPython for parsing.** A pure-Go Python parser would drop the
 python3.14 dependency, but it would also commit the project to
@@ -697,7 +697,7 @@ precision; within the transpiled subset they have to fit a machine
 word. `int64` sets an explicit upper bound that stays the same on
 32- and 64-bit Go builds, which `int` would not.
 
-## 12. What is missing and why
+### What is missing and why
 
 Each item below is out of scope for v0.3. None of it is ruled out
 forever; each is missing because a correct translation without a
@@ -733,7 +733,7 @@ runtime takes real design work.
 If you see a construct here you need, that is probably the next
 thing worth adding.
 
-## 13. Extending gopygo
+### Extending gopygo
 
 The path to teaching gopygo a new feature is:
 
@@ -763,7 +763,7 @@ Every new feature should come with at least one fixture. The
 fixture is the proof the feature works; anything unexercised reads
 as wishful thinking.
 
-## 14. Project layout
+### Project layout
 
 ```
 cmd/gopygo/main.go     CLI: transpile, run, version.
@@ -782,7 +782,7 @@ README.md              This file.
 Total Go source is a few thousand lines. You can read the whole
 codebase in an afternoon, which is the point.
 
-## 15. FAQ
+### FAQ
 
 **Why does the output parenthesise every binary expression?**
 
@@ -831,7 +831,7 @@ It started as a different tool (py -> go via compiled bytecode) and
 the name stuck through a full rewrite. Read it as "Go, pytho-n, Go",
 or as a pun on the children's game.
 
-## 16. A short history of the project
+### A short history of the project
 
 - **v0.1 (pyc -> Go).** The original attempt read CPython bytecode
   (`.pyc`) and emitted Go that drove a gopygo runtime. It worked,
@@ -851,6 +851,6 @@ output. The current version is the first where the generated code is
 something the project would recommend merging into a real Go
 codebase.
 
-## 17. License
+### License
 
 MIT. See `LICENSE`.
