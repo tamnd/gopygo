@@ -14,6 +14,18 @@ def n(node):
     d = {"_t": type(node).__name__}
     for f in node._fields:
         d[f] = n(getattr(node, f, None))
+    if isinstance(node, ast.Constant):
+        v = node.value
+        if v is None:
+            d["_vkind"] = "none"
+        elif isinstance(v, bool):
+            d["_vkind"] = "bool"
+        elif isinstance(v, int):
+            d["_vkind"] = "int"
+        elif isinstance(v, float):
+            d["_vkind"] = "float"
+        elif isinstance(v, str):
+            d["_vkind"] = "str"
     if hasattr(node, "lineno"):
         d["lineno"] = node.lineno
         d["col"] = node.col_offset
