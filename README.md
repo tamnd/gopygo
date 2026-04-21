@@ -1,16 +1,14 @@
 # gopygo
 
-A source-to-source compiler that turns a typed subset of Python 3 into
-readable, stdlib-only Go. No runtime library. No boxed values. No
-reflection. If the type system cannot pin a concrete Go type on every
-value in your program, the compiler refuses to emit code and points at
-the Python line that defeated it.
+gopygo translates a typed subset of Python 3 into stdlib-only Go. The
+output reads like Go you would write by hand. Every value in the
+program needs a concrete Go type at compile time; when gopygo cannot
+infer one, it fails at the Python line that defeated it and tells you
+what is missing.
 
-This document is long on purpose. It is equal parts tour, tutorial,
-reference, and design diary. If you only want to try the tool, jump to
-[Quick start](#quick-start). Everything after that exists so a reader
-who has never seen the project can understand not just *what* the code
-does, but *why* it does it that way.
+If you only want to try the tool, jump to [Quick start](#quick-start).
+The rest of this file is a full walkthrough of how and why the
+project is built the way it is.
 
 ---
 
@@ -42,66 +40,49 @@ does, but *why* it does it that way.
 
 ## 1. Motivation
 
-Most "Python to Go" projects fall into one of two buckets.
+Python-to-Go tools usually take one of two paths. The first treats Go
+as an interpreter target: every Python value becomes a boxed struct
+with a type tag, every call goes through a vtable, and the output is
+a wall of `rt.Call(rt.GetAttr(...))` that runs but defeats reading.
+The second path is pragmatic and narrow, like Grumpy: compile what
+fits, fall back to a runtime for the rest. That compiles useful
+programs and leaves you unable to treat the output as Go.
 
-The first bucket treats Go as an interpreter target. They emit Go that
-pulls in a runtime library, then represents every Python value as a
-boxed struct with a type tag. Integers become pointers. Lists become
-doubly-indirected slices of interface values. Calls dispatch through a
-vtable. The output runs, sort of, but it is neither readable as Go nor
-fast. If you open the generated source you see a wall of
-`rt.Call(rt.GetAttr(...))` and shrug.
+gopygo takes a third path: typed ahead-of-time translation, stdlib
+imports only. It gives up on translating every Python program. In
+exchange, the programs it does translate come out as ordinary Go:
+concrete types, plain function signatures, `int64` and `float64` and
+`map[string]int64`, standard-library imports only. The result is
+readable, debuggable, and linkable into any Go binary.
 
-The second bucket is pragmatic and narrow. Tools like Grumpy (which
-Google eventually archived) picked a hybrid: compile what you can,
-fall back to a runtime for the rest. That works. It is also not what
-you want when your goal is to read the generated code and believe it.
+The constraint that makes this work is strict: every value must have
+a concrete type the compiler can infer at compile time. Function
+parameters and returns carry PEP 484 annotations. Local variables
+take their type from the first assignment and keep it. A name that
+could be two types along two branches is an error, and the
+transpiler will refuse to paper it over with `any`. It stops and
+points at the Python line instead.
 
-gopygo belongs to a third bucket: **typed ahead-of-time translation,
-no runtime**. It gives up on translating every Python program. In
-exchange, the programs it *does* translate become real Go: concrete
-types, ordinary function signatures, `int64`s and `float64`s and
-`map[string]int64`s, imports from the Go standard library only. You
-can read it. You can debug it. You can link it into another Go binary
-the same way you link anything else.
-
-The constraint that makes this possible is simple: **every value must
-have a concrete type the compiler can infer at compile time**. Where
-Python is flexible, gopygo is strict. Function parameters and returns
-need PEP 484 annotations. Local variables get their type from their
-first assignment and keep it. A name that could be two different types
-along two branches is an error, not an `any`. The transpiler will
-never paper over ambiguity by reaching for Go's `any`; it refuses, and
-tells you the Python line to fix.
-
-This sounds harsh. In practice it is not. Scripts that use Python as a
-typed language, the kind a working engineer writes with `mypy` in the
-loop, are already within the subset. Everything else stays in Python.
+In practice the rule is less harsh than it sounds. Python code
+already written with `mypy` in the loop tends to fit as-is.
+Everything else stays in Python.
 
 ## 2. What gopygo is and is not
 
-**gopygo is:**
+gopygo is a source-to-source compiler: a frontend that reuses CPython's
+`ast` module, a small type system, and a single emission pass. Its
+job is to move small, well-typed Python programs into Go codebases
+where the result needs to look like hand-written Go.
 
-- A source-to-source compiler from a typed subset of Python 3 to Go.
-- A frontend (the Python `ast` module) plus a small type system plus a
-  single emission pass.
-- A tool for moving small, well-typed Python programs into Go
-  codebases when you want the result to look like hand-written Go.
-
-**gopygo is not:**
-
-- A Python VM in Go. There is no interpreter here. The runtime is Go's
-  runtime; there is no gopygo-specific one.
-- A complete Python implementation. Classes, decorators, generators,
-  exceptions, imports, metaclasses, async, and the rest of the wide
-  dynamic surface area are deliberately out of scope.
-- A one-click porting tool. If your Python program uses the full
-  language, gopygo will fail on almost every file. That is the
-  expected behaviour.
+A few things gopygo deliberately is not. It does not host a Python VM
+in Go; the only runtime is Go's own. It does not implement the full
+Python language: classes, decorators, generators, exceptions,
+imports, metaclasses, and async all stay out of scope. It is not a
+one-click porting tool for arbitrary codebases; throw a typical
+Python project at it and most files will fail.
 
 Think of it the way you think of `mypyc` or `shedskin`: a restricted
-dialect that gives up expressivity in exchange for guarantees on the
-output.
+dialect that trades expressivity for guarantees on the output.
 
 ## 3. Quick start
 
@@ -207,17 +188,15 @@ func pyPrintln(args ...any) {
 }
 ```
 
-Notice what is *not* there. No import from `github.com/tamnd/...`. No
-reflection. No interface{} holding a Python object. `add` is a
-function from `(int64, int64)` to `int64`; that is the actual Go
-signature, not a facade. `greet` takes and returns a `string`. The
-`pyPrintln` and `pyRepr` helpers exist because `print` in Python
-renders `True` and `3.0` differently from how Go's `fmt.Println` would
-by default; the helpers are plain Go, emitted once per program, and
-only when `print` is actually called.
+The output imports only `fmt`, `strconv`, and `strings`. `add` has
+the Go signature `(int64, int64) int64`, the real one. `greet` takes
+and returns a `string`. The `pyPrintln` and `pyRepr` helpers show up
+because Python prints `True` and `3.0` differently from Go's
+`fmt.Println`; gopygo emits them once per program, and only when
+`print` is actually called.
 
-A consumer who reads this file does not need to know anything about
-gopygo. It is Go.
+A reader coming cold to this file needs zero gopygo context. It
+reads as Go.
 
 ## 5. Architecture overview
 
@@ -288,7 +267,6 @@ the JSON shape directly.
 ### 6.2 Stage 2: the type lattice
 
 The `types` package defines the set of types gopygo can reason about.
-It is small on purpose.
 
 | Python                    | gopygo internal | Go                 |
 |---------------------------|-----------------|--------------------|
@@ -671,16 +649,16 @@ Regenerate every snapshot with `UPDATE=1 tests/run.sh`. Review the
 resulting diff in git carefully; that diff is the real specification
 of what the emitter produces.
 
-Adding a fixture is deliberately cheap. Drop three files into
+Adding a fixture is cheap by design. Drop three files into
 `tests/fixtures/`, run `UPDATE=1 tests/run.sh`, commit.
 
 ## 11. Design decisions and trade-offs
 
-**CPython for parsing.** A pure-Go Python parser would avoid the
-python3.14 dependency, at the cost of maintaining a parser that
-tracks Python's grammar forever. Not worth it for a project at this
-scope. If a user cannot install Python they probably cannot develop
-against the output either.
+**CPython for parsing.** A pure-Go Python parser would drop the
+python3.14 dependency, but it would also commit the project to
+tracking Python's grammar forever. At this scope, reusing CPython
+wins. Users who cannot install Python are unlikely to be developing
+against the output in the first place.
 
 **JSON over gob or protobuf for the AST.** JSON is a degenerate
 representation (it loses int vs float), but it is debuggable: you can
@@ -710,17 +688,16 @@ and it still compiles.
 expression in parentheses. That makes precedence a non-concern at
 emission time and makes the output `gofmt`-stable.
 
-**Integers are `int64`.** Not `int`. Python ints are arbitrary
-precision, but within the transpiled subset they must fit in a
-machine word. Picking `int64` is the honest upper bound for a
-64-bit platform; picking `int` would silently change semantics when
-porting between 32- and 64-bit Go.
+**Integers are `int64`, not `int`.** Python ints are arbitrary
+precision; within the transpiled subset they have to fit a machine
+word. `int64` sets an explicit upper bound that stays the same on
+32- and 64-bit Go builds, which `int` would not.
 
 ## 12. What is missing and why
 
-Everything in this list is deliberately out of scope for v0.3. None
-of it is ruled out forever; each is missing because a correct
-translation without a runtime is either hard or requires design work.
+Each item below is out of scope for v0.3. None of it is ruled out
+forever; each is missing because a correct translation without a
+runtime takes real design work.
 
 - **Classes.** Mapping Python's single-inheritance method resolution
   order and duck typing to Go's struct+interface model is a
@@ -811,10 +788,10 @@ practice the result is readable either way.
 
 **Why is `print` routed through a helper?**
 
-Python and Go format booleans and floats differently out of the box.
-`True` vs `true`, `3.0` vs `3`. Routing through `pyPrintln` keeps
-output byte-identical, which makes the snapshot test runner
-possible.
+Python and Go format booleans and floats differently by default:
+`True` against `true`, `3.0` against `3`. Routing through
+`pyPrintln` keeps stdout byte-identical between Python and Go, which
+is what makes the snapshot test runner work.
 
 **Why `int64` and not `int`?**
 
@@ -830,9 +807,9 @@ will stop and point at the Python line.
 
 **Can the transpiler talk to my favourite Python library?**
 
-No. There is no import mechanism in v0.3, and no runtime for the
-imported module to live in. Rewriting the Python program to not
-depend on the library is the path.
+Not in v0.3. There is no import mechanism, and no runtime for an
+imported module to live in. Rewrite the Python to drop the
+dependency, or keep that program in Python.
 
 **What Python version does the frontend need?**
 
@@ -847,16 +824,15 @@ in `tests/fixtures/*.expected.txt` use LF line endings.
 **Why is the project called gopygo?**
 
 It started as a different tool (py -> go via compiled bytecode) and
-the name stuck through a full rewrite. Think of it as "Go, pytho-n,
-Go", or as a pun on the children's game. The name is not load
-bearing.
+the name stuck through a full rewrite. Read it as "Go, pytho-n, Go",
+or as a pun on the children's game.
 
 ## 16. A short history of the project
 
 - **v0.1 (pyc -> Go).** The original attempt read CPython bytecode
   (`.pyc`) and emitted Go that drove a gopygo runtime. It worked,
   but the output was a dispatch table and a forest of
-  `rt.Call(...)`. No one would read it for fun.
+  `rt.Call(...)` that read like assembly.
 - **v0.2 (py -> Go with a runtime).** A full rewrite moved to
   source-level parsing via `ast.parse`, but still leaned on a
   runtime package and boxed `rt.Value`s. Output was easier to read
