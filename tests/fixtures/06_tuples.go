@@ -77,74 +77,86 @@ func main() {
 	p = rt.NewTuple(rt.NewIntInt(1), rt.NewIntInt(2))
 	globals["p"] = p
 	_ = rt.Must(rt.Call(loadName("print"), p))
-	_t2 := rt.MustIter(rt.GetIter(p))
-	var _tv3 []rt.Value
-	for {
-		v, ok := _t2.Next()
-		if !ok {
-			break
+	_tv2 := func() []rt.Value {
+		_it := rt.MustIter(rt.GetIter(p))
+		var xs []rt.Value
+		for {
+			v, ok := _it.Next()
+			if !ok {
+				break
+			}
+			xs = append(xs, v)
 		}
-		_tv3 = append(_tv3, v)
-	}
-	if len(_tv3) != 2 {
-		panic(rt.TypeError("unpack: expected 2, got %d", len(_tv3)))
-	}
+		if len(xs) != 2 {
+			panic(rt.TypeError("unpack: expected 2, got %d", len(xs)))
+		}
+		return xs
+	}()
+	a = _tv2[0]
+	globals["a"] = a
+	b = _tv2[1]
+	globals["b"] = b
+	_ = rt.Must(rt.Call(loadName("print"), a, b))
+	_tv3 := func() []rt.Value {
+		_it := rt.MustIter(rt.GetIter(rt.NewTuple(b, a)))
+		var xs []rt.Value
+		for {
+			v, ok := _it.Next()
+			if !ok {
+				break
+			}
+			xs = append(xs, v)
+		}
+		if len(xs) != 2 {
+			panic(rt.TypeError("unpack: expected 2, got %d", len(xs)))
+		}
+		return xs
+	}()
 	a = _tv3[0]
 	globals["a"] = a
 	b = _tv3[1]
 	globals["b"] = b
 	_ = rt.Must(rt.Call(loadName("print"), a, b))
-	_t4 := rt.MustIter(rt.GetIter(rt.NewTuple(b, a)))
-	var _tv5 []rt.Value
-	for {
-		v, ok := _t4.Next()
-		if !ok {
-			break
+	_tv4 := func() []rt.Value {
+		_it := rt.MustIter(rt.GetIter(rt.NewTuple(rt.NewIntInt(10), rt.NewIntInt(20), rt.NewIntInt(30))))
+		var xs []rt.Value
+		for {
+			v, ok := _it.Next()
+			if !ok {
+				break
+			}
+			xs = append(xs, v)
 		}
-		_tv5 = append(_tv5, v)
-	}
-	if len(_tv5) != 2 {
-		panic(rt.TypeError("unpack: expected 2, got %d", len(_tv5)))
-	}
-	a = _tv5[0]
-	globals["a"] = a
-	b = _tv5[1]
-	globals["b"] = b
-	_ = rt.Must(rt.Call(loadName("print"), a, b))
-	_t6 := rt.MustIter(rt.GetIter(rt.NewTuple(rt.NewIntInt(10), rt.NewIntInt(20), rt.NewIntInt(30))))
-	var _tv7 []rt.Value
-	for {
-		v, ok := _t6.Next()
-		if !ok {
-			break
+		if len(xs) != 3 {
+			panic(rt.TypeError("unpack: expected 3, got %d", len(xs)))
 		}
-		_tv7 = append(_tv7, v)
-	}
-	if len(_tv7) != 3 {
-		panic(rt.TypeError("unpack: expected 3, got %d", len(_tv7)))
-	}
-	x = _tv7[0]
+		return xs
+	}()
+	x = _tv4[0]
 	globals["x"] = x
-	y = _tv7[1]
+	y = _tv4[1]
 	globals["y"] = y
-	z = _tv7[2]
+	z = _tv4[2]
 	globals["z"] = z
 	_ = rt.Must(rt.Call(loadName("print"), x, y, z))
-	_t8 := rt.MustIter(rt.GetIter(rt.Must(rt.Call(minmax, rt.NewTuple(rt.NewIntInt(3), rt.NewIntInt(1), rt.NewIntInt(4), rt.NewIntInt(1), rt.NewIntInt(5), rt.NewIntInt(9), rt.NewIntInt(2), rt.NewIntInt(6))))))
-	var _tv9 []rt.Value
-	for {
-		v, ok := _t8.Next()
-		if !ok {
-			break
+	_tv5 := func() []rt.Value {
+		_it := rt.MustIter(rt.GetIter(rt.Must(rt.Call(minmax, rt.NewTuple(rt.NewIntInt(3), rt.NewIntInt(1), rt.NewIntInt(4), rt.NewIntInt(1), rt.NewIntInt(5), rt.NewIntInt(9), rt.NewIntInt(2), rt.NewIntInt(6))))))
+		var xs []rt.Value
+		for {
+			v, ok := _it.Next()
+			if !ok {
+				break
+			}
+			xs = append(xs, v)
 		}
-		_tv9 = append(_tv9, v)
-	}
-	if len(_tv9) != 2 {
-		panic(rt.TypeError("unpack: expected 2, got %d", len(_tv9)))
-	}
-	lo = _tv9[0]
+		if len(xs) != 2 {
+			panic(rt.TypeError("unpack: expected 2, got %d", len(xs)))
+		}
+		return xs
+	}()
+	lo = _tv5[0]
 	globals["lo"] = lo
-	hi = _tv9[1]
+	hi = _tv5[1]
 	globals["hi"] = hi
 	_ = rt.Must(rt.Call(loadName("print"), lo, hi))
 }

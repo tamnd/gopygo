@@ -52,27 +52,30 @@ func _impl_fib_iter(_args []rt.Value) (rt.Value, error) {
 	a = rt.NewIntInt(0)
 	b = rt.NewIntInt(1)
 	{
-		_it1 := rt.MustIter(rt.GetIter(rt.Must(rt.Call(loadName("range"), n))))
+		_it2 := rt.MustIter(rt.GetIter(rt.Must(rt.Call(loadName("range"), n))))
 		for {
-			_v, _ok := _it1.Next()
+			_v, _ok := _it2.Next()
 			if !_ok {
 				break
 			}
 			_ = _v
-			_t2 := rt.MustIter(rt.GetIter(rt.NewTuple(b, rt.Must(rt.Add(a, b)))))
-			var _tv3 []rt.Value
-			for {
-				v, ok := _t2.Next()
-				if !ok {
-					break
+			_tv1 := func() []rt.Value {
+				_it := rt.MustIter(rt.GetIter(rt.NewTuple(b, rt.Must(rt.Add(a, b)))))
+				var xs []rt.Value
+				for {
+					v, ok := _it.Next()
+					if !ok {
+						break
+					}
+					xs = append(xs, v)
 				}
-				_tv3 = append(_tv3, v)
-			}
-			if len(_tv3) != 2 {
-				panic(rt.TypeError("unpack: expected 2, got %d", len(_tv3)))
-			}
-			a = _tv3[0]
-			b = _tv3[1]
+				if len(xs) != 2 {
+					panic(rt.TypeError("unpack: expected 2, got %d", len(xs)))
+				}
+				return xs
+			}()
+			a = _tv1[0]
+			b = _tv1[1]
 		}
 	}
 	return a, nil
@@ -94,9 +97,9 @@ func main() {
 	fib_iter = _fn_fib_iter
 	globals["fib_iter"] = fib_iter
 	{
-		_it4 := rt.MustIter(rt.GetIter(rt.Must(rt.Call(loadName("range"), rt.NewIntInt(10)))))
+		_it3 := rt.MustIter(rt.GetIter(rt.Must(rt.Call(loadName("range"), rt.NewIntInt(10)))))
 		for {
-			_v, _ok := _it4.Next()
+			_v, _ok := _it3.Next()
 			if !_ok {
 				break
 			}
