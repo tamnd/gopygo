@@ -1,0 +1,12 @@
+var _fn_{{.Name}} = &rt.Func{Name: {{.NameQ}}, Arity: {{.Arity}}, Impl: _impl_{{.Name}}}
+
+func _impl_{{.Name}}(_args []rt.Value) (rt.Value, error) {
+	if len(_args) != {{.Arity}} {
+		return nil, rt.TypeError("{{.Name}}() takes {{.Arity}} positional arguments but %d were given", len(_args))
+	}
+{{range $i, $p := .Params}}	{{$p}} := _args[{{$i}}]
+{{end}}{{range .Locals}}	var {{.}} rt.Value
+{{end}}	_ = _args
+{{.Body}}	return rt.None, nil
+}
+

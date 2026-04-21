@@ -1,0 +1,7 @@
+hello
+hello, world
+5
+gopygo says hi 3 times
+sum=3
+True
+True

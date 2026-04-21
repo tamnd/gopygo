@@ -1,9 +1,8 @@
 #!/bin/bash
-# Golden-output harness. For every fixture:
-#   1. compile with python3.14 -m py_compile
-#   2. transpile + build + run via `gopygo run`
-#   3. diff stdout byte-for-byte against `python3.14 fixture.py`
-# Any diff fails the run with a non-zero exit status.
+# For every tests/fixtures/NN_*.py:
+#   1. transpile + build + run via `gopygo run`
+#   2. diff stdout byte-for-byte against `python3.14 fixture.py`.
+# Any diff fails.
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -11,17 +10,15 @@ SRC="$(pwd)"
 export GOPYGO_SRC="$SRC"
 
 fail=0
-for f in tests/fixtures/*.py; do
+for f in tests/fixtures/[0-9]*.py; do
     base=$(basename "$f" .py)
-    python3.14 -m py_compile "$f"
-    pyc="tests/fixtures/__pycache__/${base}.cpython-314.pyc"
     pyout=$(python3.14 "$f")
-    goout=$(go run ./cmd/gopygo run "$pyc")
+    goout=$(go run ./cmd/gopygo run "$f")
     if [ "$pyout" = "$goout" ]; then
         printf 'OK   %s\n' "$base"
     else
         printf 'FAIL %s\n' "$base"
-        diff <(printf '%s\n' "$pyout") <(printf '%s\n' "$goout") | head -20
+        diff <(printf '%s\n' "$pyout") <(printf '%s\n' "$goout") | head -40
         fail=1
     fi
 done

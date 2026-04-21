@@ -21,9 +21,132 @@ func init() {
 	Builtins["range"] = &Func{Name: "range", Arity: -1, Impl: pyRange}
 	Builtins["len"] = &Func{Name: "len", Arity: 1, Impl: pyLen}
 	Builtins["abs"] = &Func{Name: "abs", Arity: 1, Impl: pyAbs}
+	Builtins["min"] = &Func{Name: "min", Arity: -1, Impl: pyMin}
+	Builtins["max"] = &Func{Name: "max", Arity: -1, Impl: pyMax}
+	Builtins["str"] = &Func{Name: "str", Arity: 1, Impl: pyStr}
+	Builtins["int"] = &Func{Name: "int", Arity: -1, Impl: pyInt}
+	Builtins["bool"] = &Func{Name: "bool", Arity: -1, Impl: pyBool}
+	Builtins["list"] = &Func{Name: "list", Arity: -1, Impl: pyList}
 	Builtins["True"] = True
 	Builtins["False"] = False
 	Builtins["None"] = None
+}
+
+func pyMin(args []Value) (Value, error) { return minMax(args, -1) }
+func pyMax(args []Value) (Value, error) { return minMax(args, +1) }
+
+func minMax(args []Value, sign int) (Value, error) {
+	var xs []Value
+	if len(args) == 1 {
+		it, err := GetIter(args[0])
+		if err != nil {
+			return nil, err
+		}
+		for {
+			v, ok := it.Next()
+			if !ok {
+				break
+			}
+			xs = append(xs, v)
+		}
+	} else {
+		xs = args
+	}
+	if len(xs) == 0 {
+		return nil, TypeError("min/max() arg is an empty sequence")
+	}
+	best := xs[0]
+	for _, v := range xs[1:] {
+		c, ok := cmpNumeric(v, best)
+		if !ok {
+			if vs, ok := v.(*Str); ok {
+				if bs, ok := best.(*Str); ok {
+					switch {
+					case vs.V < bs.V:
+						c = -1
+					case vs.V > bs.V:
+						c = 1
+					}
+					ok = true
+					_ = ok
+				}
+			}
+		}
+		if (sign < 0 && c < 0) || (sign > 0 && c > 0) {
+			best = v
+		}
+	}
+	return best, nil
+}
+
+func pyStr(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, TypeError("str() takes exactly one argument (%d given)", len(args))
+	}
+	return &Str{V: Stringify(args[0])}, nil
+}
+
+func pyInt(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return NewIntInt(0), nil
+	}
+	if len(args) != 1 {
+		return nil, TypeError("int() takes at most 1 argument (%d given)", len(args))
+	}
+	switch x := args[0].(type) {
+	case *Int:
+		return x, nil
+	case *Bool:
+		if x.V {
+			return NewIntInt(1), nil
+		}
+		return NewIntInt(0), nil
+	case *Float:
+		r := &Int{}
+		r.V.SetInt64(int64(x.V))
+		return r, nil
+	case *Str:
+		n, ok := new(big.Int).SetString(x.V, 10)
+		if !ok {
+			return nil, TypeError("invalid literal for int(): %q", x.V)
+		}
+		r := &Int{}
+		r.V.Set(n)
+		return r, nil
+	}
+	return nil, TypeError("int() argument must be a number or string, not '%s'", TypeName(args[0]))
+}
+
+func pyBool(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return False, nil
+	}
+	if len(args) != 1 {
+		return nil, TypeError("bool() takes at most 1 argument (%d given)", len(args))
+	}
+	return Boxed(Truthy(args[0])), nil
+}
+
+func pyList(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return &List{}, nil
+	}
+	if len(args) != 1 {
+		return nil, TypeError("list() takes at most 1 argument (%d given)", len(args))
+	}
+	it, err := GetIter(args[0])
+	if err != nil {
+		return nil, err
+	}
+	var xs []Value
+	for {
+		v, ok := it.Next()
+		if !ok {
+			break
+		}
+		xs = append(xs, v)
+	}
+	return &List{V: xs}, nil
 }
 
 func pyPrint(args []Value) (Value, error) {
