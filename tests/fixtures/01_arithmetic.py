@@ -1,0 +1,12 @@
+print(1 + 2)
+print(10 - 3)
+print(4 * 5)
+print(10 / 4)
+print(10 // 3)
+print(10 % 3)
+print(-7 // 2)
+print(-7 % 2)
+print(2 ** 10)
+print(-3)
+x = 1 + 2 * 3
+print(x)
