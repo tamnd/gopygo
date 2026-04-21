@@ -1,10 +1,10 @@
 # gopygo
 
-gopygo translates a typed subset of Python 3 into stdlib-only Go. The
-output reads like Go you would write by hand. Every value in the
-program needs a concrete Go type at compile time; when gopygo cannot
-infer one, it fails at the Python line that defeated it and tells you
-what is missing.
+gopygo translates a typed subset of Python 3 into stdlib-only Go.
+The output reads like Go you would write by hand. Every value in
+the program needs a concrete Go type at compile time; when
+inference stalls, gopygo stops at the Python line that defeated it
+and tells you what the annotation should look like.
 
 If you only want to try the tool, jump to [Quick start](#quick-start).
 The rest of this file is a full walkthrough of how and why the
@@ -15,7 +15,7 @@ project is built the way it is.
 ## Table of contents
 
 1. [Motivation](#1-motivation)
-2. [What gopygo is and is not](#2-what-gopygo-is-and-is-not)
+2. [What gopygo covers](#2-what-gopygo-covers)
 3. [Quick start](#3-quick-start)
 4. [A worked example](#4-a-worked-example)
 5. [Architecture overview](#5-architecture-overview)
@@ -67,22 +67,24 @@ In practice the rule is less harsh than it sounds. Python code
 already written with `mypy` in the loop tends to fit as-is.
 Everything else stays in Python.
 
-## 2. What gopygo is and is not
+## 2. What gopygo covers
 
-gopygo is a source-to-source compiler: a frontend that reuses CPython's
-`ast` module, a small type system, and a single emission pass. Its
-job is to move small, well-typed Python programs into Go codebases
-where the result needs to look like hand-written Go.
+gopygo is a source-to-source compiler: a frontend that reuses
+CPython's `ast` module, a small type system, and a single emission
+pass. Its job is to move small, well-typed Python programs into Go
+codebases when the result needs to look like hand-written Go.
 
-A few things gopygo deliberately is not. It does not host a Python VM
-in Go; the only runtime is Go's own. It does not implement the full
-Python language: classes, decorators, generators, exceptions,
-imports, metaclasses, and async all stay out of scope. It is not a
-one-click porting tool for arbitrary codebases; throw a typical
-Python project at it and most files will fail.
+The scope is deliberate. Execution stays Go's job; gopygo emits
+standalone Go, and the only runtime is Go's own. The supported
+language is a subset: flow-sensitive local inference plus PEP 484
+annotations on function signatures. Constructs that stay outside
+the subset (classes, decorators, generators, exceptions, imports,
+metaclasses, async) fail at transpile time with a pointer to the
+Python line, rather than being silently dropped.
 
-Think of it the way you think of `mypyc` or `shedskin`: a restricted
-dialect that trades expressivity for guarantees on the output.
+Think of it the way you think of `mypyc` or `shedskin`: a
+restricted dialect that trades expressivity for guarantees on the
+output.
 
 ## 3. Quick start
 
@@ -103,8 +105,8 @@ go build -o gopygo ./cmd/gopygo
 ./gopygo version
 ```
 
-The CLI is intentionally minimal. Three verbs, no config file, no
-plugin system.
+The CLI is intentionally minimal: three verbs and nothing else to
+configure.
 
 Run the test suite:
 
@@ -114,8 +116,9 @@ Run the test suite:
 
 This transpiles every fixture, executes both the Python original and
 the generated Go, and diffs their output byte-for-byte. It also greps
-the emitted Go to confirm that no fixture imports the gopygo module,
-which is the guard-rail that keeps the "no runtime" promise honest.
+the emitted Go to confirm every fixture imports only stdlib
+packages, which is the guard-rail that keeps the stdlib-only
+promise honest.
 
 ## 4. A worked example
 
@@ -227,25 +230,24 @@ formatted Go source
    v   -o hello.go   or   go run
 ```
 
-There are no cross-cutting concerns. There is no plugin mechanism.
-Each stage has a single job and a single entry point.
+Each stage has a single job and a single entry point. Cross-cutting
+machinery stays out by design.
 
 ## 6. The pipeline, stage by stage
 
 ### 6.1 Stage 1: parsing with CPython
 
-gopygo does not reimplement a Python parser. It shells out to the one
-Python already ships. The `pyast` package embeds a tiny Python helper
-script, writes it to a temp file, invokes `python3.14` on the user's
-input, and reads back a JSON representation of the AST.
+gopygo reuses the parser that Python already ships. The `pyast`
+package embeds a tiny Python helper script, writes it to a temp
+file, invokes `python3.14` on the user's input, and reads back a
+JSON representation of the AST.
 
-Why CPython? Two reasons. First, correctness: the only implementation
-that agrees with the Python language specification on every edge case
-of the grammar is CPython itself. Reimplementing the parser in Go
-would mean tracking Python's evolving syntax forever. Second, scope:
-the parser is not where the interesting work lives. The interesting
-work is the typing and emission stages. Offloading parsing to CPython
-lets the rest of the codebase stay small.
+Why CPython? Two reasons. Correctness comes first: the
+implementation that tracks every edge case of Python's grammar is
+CPython itself, and piggybacking on it keeps gopygo's output
+honest as the language evolves. Scope comes second: the
+interesting work here is typing and emission, so offloading
+parsing keeps the rest of the codebase small.
 
 The helper walks the `ast.AST` tree and dumps a compact dictionary
 form. For every node it records the class name under the key `_t`, all
@@ -254,9 +256,9 @@ fields declared by the class, and `lineno` / `col` when present. For
 `float`, `bool`, `str`, or `none`. That extra tag exists because
 `json.dump` turns both `3` and `3.0` into the same JSON number, and
 Go's default `json.Unmarshal` into `any` lifts every number to
-`float64`. Without `_vkind` the Go side cannot tell an int literal
-from a float literal, and picking the wrong one changes the emitted
-code.
+`float64`. With `_vkind` attached, the Go side picks the right
+emission for an int literal versus a float literal on the first
+look.
 
 On the Go side, `pyast.Node` is a thin wrapper around
 `map[string]any`. It exposes `Type()`, `Line()`, `Col()`, and
@@ -289,8 +291,8 @@ lattice change.
 Each type answers two questions. `Go()` returns the Go source string
 for that type, which is what the emitter splices into the output.
 `String()` returns a Python-flavoured name for use in error messages,
-so a diagnostic reads `"cannot compare int and str"` instead of
-`"cannot compare int64 and string"`.
+so a diagnostic reads `"compare between int and str rejected"`
+instead of `"compare between int64 and string rejected"`.
 
 Two helpers do the rest of the work:
 
@@ -302,11 +304,11 @@ Two helpers do the rest of the work:
   result is `int`; otherwise `nil`, which the emitter treats as a
   type error.
 
-`TAny` deserves a note. It never appears from inference. The only way
-a value gets typed as `Any` is if the user explicitly annotated it
-with `Any` from Python's `typing` module. The transpiler will not
-invent `any` to paper over an unknown. If it cannot figure out a
-concrete type, it stops and tells you.
+`TAny` deserves a note. Inference leaves it alone entirely. A
+value picks up `TAny` only when the user annotated it with `Any`
+from Python's `typing` module. Inference stays concrete, and when
+it runs out of evidence it stops with a source-located diagnostic
+rather than reaching for `any`.
 
 ### 6.3 Stage 3: fused inference and emission
 
@@ -385,7 +387,7 @@ reasons: `absInt` for integer absolute value, `minInt` / `maxInt` for
 variadic integer min/max, `mustAtoi64` for `int("42")`. Each helper
 is emitted once per program, and only when the corresponding builtin
 is actually used. If your program never calls `abs`, the `absInt`
-helper is not in the output.
+helper stays out of the output.
 
 ### 6.4 Stage 4: formatting and optional execution
 
@@ -417,7 +419,8 @@ directory and shells `go run` on it.
 - `int`, `float`, `bool`, `str`, `None`, `Any`.
 - `list[T]`, `dict[K, V]`, `tuple[T1, T2, ...]` where each `T` is
   itself a supported annotation.
-- Bare forward-referenced names (strings) are not supported.
+- Annotations must be real names; bare string forward references
+  stay unsupported for now.
 
 ### Expressions
 
@@ -439,7 +442,7 @@ directory and shells `go run` on it.
 - f-strings (`JoinedStr`). Each interpolation picks a format verb
   based on the inferred type (`%d`, `%g`, `%t`, `%s`, `%v`).
 - Conditional expressions (`a if cond else b`). Emitted as an inline
-  closure because Go has no ternary.
+  closure, since Go expresses the shape that way.
 - List and dict literals. Element types must agree (with numeric
   widening for lists).
 
@@ -612,15 +615,16 @@ There are four broad error categories:
 1. **Unsupported construct.** Classes, imports, `try`, etc. The fix
    is to remove the construct or keep that program in Python.
 2. **Missing annotation.** Function parameters and returns must be
-   annotated. Local variables are inferred; parameters are not.
+   annotated. Local variables come from inference; parameters come
+   from annotations.
 3. **Type mismatch.** `return` types must match the declared return;
    reassignments must match the declared local type (with numeric
    widening); comparisons and arithmetic must have compatible
    operands.
 4. **Undefined name.** Names used before they are bound.
 
-The transpiler does not produce warnings. Every diagnostic is fatal.
-A file either compiles cleanly or does not compile at all.
+Every diagnostic is fatal. A file either compiles cleanly or stops
+at the first problem.
 
 ## 10. Testing philosophy
 
@@ -642,7 +646,7 @@ fixture is a three-file triplet:
    output against `.expected.txt`.
 3. `grep` the emitted `.go` for `github.com/tamnd/gopygo`. If any
    fixture ever imports the gopygo module the test fails. This is
-   the guard-rail that keeps the "no runtime" promise honest across
+   the guard-rail that keeps the stdlib-only promise honest across
    refactors.
 
 Regenerate every snapshot with `UPDATE=1 tests/run.sh`. Review the
@@ -657,8 +661,8 @@ Adding a fixture is cheap by design. Drop three files into
 **CPython for parsing.** A pure-Go Python parser would drop the
 python3.14 dependency, but it would also commit the project to
 tracking Python's grammar forever. At this scope, reusing CPython
-wins. Users who cannot install Python are unlikely to be developing
-against the output in the first place.
+wins. Developers working against gopygo's output already have
+Python available; the dependency costs them nothing in practice.
 
 **JSON over gob or protobuf for the AST.** JSON is a degenerate
 representation (it loses int vs float), but it is debuggable: you can
@@ -703,17 +707,17 @@ runtime takes real design work.
   order and duck typing to Go's struct+interface model is a
   non-trivial design. A future version will probably accept a
   dataclass-style subset.
-- **Exceptions.** `try`, `except`, and `raise` have no direct Go
-  equivalent. Go's `error` values are the right shape for
-  `raise ValueError(...)`-style programs, but mapping `except`
-  blocks needs a full design pass.
+- **Exceptions.** Python's `try`/`except`/`raise` would need a
+  chosen mapping to Go. `error` values are the right shape for
+  `raise ValueError(...)`-style programs; catching and re-raising
+  across call frames wants a full design pass.
 - **Generators and `yield`.** Coroutine-backed iteration is possible
   in Go via channels or callbacks, but the choice of encoding
   matters for readability and performance.
-- **Arbitrary-precision ints.** Python ints do not overflow. Go's
-  `int64` does. A future version could emit `math/big.Int` on
-  request; by default v0.3 accepts the overflow risk in exchange
-  for clean output.
+- **Arbitrary-precision ints.** Python ints grow unboundedly; Go's
+  `int64` wraps past 2^63. A future version could emit
+  `math/big.Int` on request; v0.3 takes `int64` and its overflow
+  risk in exchange for clean output.
 - **Imports and the Python standard library.** Every external Python
   module would need a Go mapping. The design question is whether
   users can register their own mappings or only a curated set ships.
@@ -751,13 +755,13 @@ The path to teaching gopygo a new feature is:
    in `emitHelpers`, and register any imports the helper needs at
    the point where you set the flag, not when you emit the helper.
    The header has already been written by then.
-6. **Run the full test suite** and confirm no fixture drifted. If
-   a fixture did drift, look at the diff: it is either the intended
-   effect of your change, or a regression.
+6. **Run the full test suite** and check every fixture. Each diff
+   tells you something: either the intended effect of your change,
+   or a regression.
 
-Every new feature should come with at least one fixture. A feature
-without a fixture is indistinguishable from a feature that does not
-work yet.
+Every new feature should come with at least one fixture. The
+fixture is the proof the feature works; anything unexercised reads
+as wishful thinking.
 
 ## 14. Project layout
 
@@ -801,15 +805,15 @@ on 32- and 64-bit Go.
 
 **Can I use `any` to paper over an unknown type?**
 
-Only by annotating a value as `Any` explicitly. Inference will not
-produce `Any`. If the compiler cannot figure out a concrete type it
-will stop and point at the Python line.
+Only by annotating a value as `Any` explicitly. Inference stays
+concrete; where it runs out of evidence it stops and points at the
+Python line that needs an annotation.
 
 **Can the transpiler talk to my favourite Python library?**
 
-Not in v0.3. There is no import mechanism, and no runtime for an
-imported module to live in. Rewrite the Python to drop the
-dependency, or keep that program in Python.
+Not in v0.3. The subset covers pure-Python scripts; anything that
+reaches for `import some_third_party_lib` stays in Python. Rewrite
+the Python to drop the dependency, or run it under CPython.
 
 **What Python version does the frontend need?**
 
@@ -837,9 +841,10 @@ or as a pun on the children's game.
   source-level parsing via `ast.parse`, but still leaned on a
   runtime package and boxed `rt.Value`s. Output was easier to read
   than v0.1 but still not Go that a human would write.
-- **v0.3 (py -> Go, no runtime, typed subset).** The current
-  project. The runtime is gone. The type system is small but
-  strict. The output is Go you would write.
+- **v0.3 (py -> Go, stdlib-only output, typed subset).** The
+  current project. Generated programs link only the Go standard
+  library. The type system is small but strict. The output reads
+  as Go you would write.
 
 Each rewrite narrowed the subset and raised the quality bar on the
 output. The current version is the first where the generated code is
