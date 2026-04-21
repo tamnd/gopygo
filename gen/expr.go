@@ -177,30 +177,31 @@ func (g *gen) emitCompare(e pyast.Node) (string, error) {
 	if len(ops) != len(comparators) {
 		return "", g.errf(e, "Compare ops/comparators mismatch")
 	}
-	// Chain: walk pairs, AND together.
-	var parts []string
-	cur := left
+	// Non-chained: emit a single compareCall.
+	if len(ops) == 1 {
+		rhs, err := g.emitExpr(comparators[0])
+		if err != nil {
+			return "", err
+		}
+		return compareCall(ops[0].Type(), left, rhs), nil
+	}
+	// Chained a OP1 b OP2 c: one IIFE binds every sub-expression once,
+	// then short-circuits through each pairwise compare.
+	var b strings.Builder
+	b.WriteString("func() rt.Value {\n")
+	lhs := g.fresh("_cl")
+	fmt.Fprintf(&b, "\t%s := %s\n", lhs, left)
+	prev := lhs
 	for i, op := range ops {
 		rhs, err := g.emitExpr(comparators[i])
 		if err != nil {
 			return "", err
 		}
-		// Evaluate rhs once per pair; bind to a fresh name for chaining.
-		tmp := g.fresh("_cmp")
-		parts = append(parts, fmt.Sprintf("func() rt.Value { %s := %s; _ = %s; return %s }()",
-			tmp, rhs, tmp, compareCall(op.Type(), cur, tmp)))
-		cur = tmp
-		_ = i
-	}
-	if len(parts) == 1 {
-		return parts[0], nil
-	}
-	// AND all the *Bool results: wrap in Truthy + &&.
-	var b strings.Builder
-	b.WriteString("func() rt.Value {\n")
-	for i, p := range parts {
-		fmt.Fprintf(&b, "\t_c%d := %s\n", i, p)
-		fmt.Fprintf(&b, "\tif !rt.Truthy(_c%d) { return rt.False }\n", i)
+		cur := g.fresh("_cr")
+		fmt.Fprintf(&b, "\t%s := %s\n", cur, rhs)
+		fmt.Fprintf(&b, "\tif !rt.Truthy(%s) { return rt.False }\n",
+			compareCall(op.Type(), prev, cur))
+		prev = cur
 	}
 	b.WriteString("\treturn rt.True\n}()")
 	return b.String(), nil
