@@ -1,8 +1,12 @@
 # gopygo
 
-Transpile CPython 3.14 `.pyc` files into standalone Go programs.
+Transpile Python 3.14 source into standalone Go programs.
 
-`gopygo` reads a `.pyc` produced by `python3.14 -m py_compile`, emits a `.go` source file, and hands it to the Go toolchain. The resulting binary reproduces the original program's observable behaviour with no Python interpreter involved at runtime. No cgo, no libpython, no JIT.
+`gopygo` reads a `.py` file, parses it with CPython's own `ast`
+module, emits a `.go` file whose block structure mirrors the
+original Python, and hands it to the Go toolchain. The resulting
+binary reproduces the program's observable behaviour with no Python
+interpreter involved at runtime. No cgo, no libpython.
 
 ## Quick start
 
@@ -11,8 +15,7 @@ cat > hello.py <<'EOF'
 print("hi from gopygo")
 EOF
 
-python3.14 -m py_compile hello.py
-go run ./cmd/gopygo run __pycache__/hello.cpython-314.pyc
+go run ./cmd/gopygo run hello.py
 ```
 
 Expected output:
@@ -24,55 +27,94 @@ hi from gopygo
 To write the generated Go to disk instead of running it:
 
 ```bash
-go run ./cmd/gopygo transpile __pycache__/hello.cpython-314.pyc -o hello.go
+go run ./cmd/gopygo transpile -o hello.go hello.py
 ```
 
 ## How it works
 
-`gopygo` translates each Python code object to one Go function. Python locals become Go variables; the evaluation stack becomes a fixed-size Go array sized from CPython's `co_stacksize`; bytecode jumps become `goto` statements between labels. Built-in operations delegate to the `runtime` package (`rt.Add`, `rt.Compare`, `rt.Call`, ...), which is a small support library that every generated program imports.
+Parsing is delegated to CPython: a small embedded helper invokes
+`ast.parse` and hands the tree back as JSON. Go walks that tree and
+emits one Go `func` per Python `def` plus a `main()` for module-
+level code. Python names stay Go names. Python `if`/`while`/`for`
+become Go `if`/`for` loops over a runtime iterator. Fallible
+operations (`a + b`, `f(x)`, `a < b`) are wrapped in `rt.Must` so
+they slot into any Go expression position and panic with a
+Python-style error on failure; the generated `main` recovers and
+exits non-zero.
+
+Every generated program imports `rt
+"github.com/tamnd/gopygo/runtime"`, which supplies `rt.Value`, the
+arithmetic, comparison, iteration, and built-in call surface.
+
+You can see the output shape by reading `tests/fixtures/*.go` — each
+fixture has its generated Go checked in next to the `.py` (under
+`//go:build ignore` so it does not interfere with `go build ./...`).
+
+## Requirements
+
+- Go 1.26
+- CPython 3.14 on PATH (the frontend shells to `python3.14` for
+  parsing; the test harness compares stdout against it)
 
 ## What works today
 
-v0.1, verified against CPython 3.14.4 on the fixtures under `tests/fixtures/`.
+v0.1 of the source transpiler, verified against CPython 3.14 on the
+fixtures under `tests/fixtures/`.
 
 | Area | Status |
 |---|---|
 | `int` (arbitrary precision via `math/big`), `float`, `bool`, `str`, `None` | works |
-| Arithmetic: `+`, `-`, `*`, `/`, `//`, `%`, unary `-`, unary `not` | works |
-| Comparisons: `<`, `<=`, `==`, `!=`, `>`, `>=` | works |
-| Control flow: `if`/`else`, `while`, `for i in range(N)`, simple f-strings | works |
-| Functions, positional args, recursion, calls across functions | works |
-| Module-level `STORE_NAME` / `LOAD_NAME` | works |
-| Built-ins: `print`, `range`, `len`, `abs`, `True`, `False`, `None` | works |
-| Classes, closures, `*args`/`**kwargs`, defaults | not yet |
-| Generators, `async`/`await`, `with` | not yet |
-| Exceptions, `try`/`except`/`finally` | not yet |
-| `import` of anything other than the entry file | not yet |
+| Arithmetic: `+ - * / // % **`, unary `-`, unary `not` | works |
+| Comparisons including chained (`a < b < c`), `and` / `or`, `is` / `is not`, `in` / `not in` | works |
+| Control flow: `if` / `elif` / `else`, `while`, `for`, `break`, `continue` | works |
+| Functions, positional args, recursion, mutual calls | works |
+| Module-level names and cross-function lookup via `globals` + builtins | works |
+| Tuples, lists, dicts (literal, subscript, assignment, `in`) | works |
+| f-strings (no format spec) | works |
+| Built-ins: `print`, `range`, `len`, `abs`, `min`, `max`, `str`, `int`, `bool`, `list` | works |
+| Classes, inheritance, `__init__`, `super` | not yet |
+| Generators, `yield`, `async` / `await`, `with` | not yet |
+| Exceptions, `try` / `except` / `finally` | not yet |
+| Decorators, `*args`, `**kwargs`, defaults, closures over locals | not yet |
+| `import` of user modules | not yet |
 | C extensions | out of scope forever |
 
-Encountering any opcode outside the v0.1 set is a hard transpile-time error naming the opcode and offset. No silent fallback to an interpreter.
+Any unsupported AST node is a hard transpile-time error with a
+source location. No silent fallback to an interpreter.
 
 ## Tests
 
 ```bash
-go test ./runtime/        # runtime unit tests
-tests/run.sh              # end-to-end fixtures: python3.14 vs gopygo stdout diff
+go test ./runtime/    # runtime unit tests
+tests/run.sh          # end-to-end fixtures: python3.14 vs gopygo stdout diff
 ```
 
-`tests/run.sh` compiles every `.py` under `tests/fixtures/` with `python3.14 -m py_compile`, transpiles with gopygo, builds and runs the result, and diffs stdout byte-for-byte against `python3.14 fixture.py`. Any diff fails.
+`tests/run.sh` iterates every `NN_topic.py` under `tests/fixtures/`,
+transpiles it, runs the resulting binary, and diffs stdout
+byte-for-byte against `python3.14 NN_topic.py`. Any diff fails.
 
 ## Project layout
 
-- `pyc/` reads `.pyc` files (marshal decoder) and holds the CPython 3.14 opcode table.
-- `runtime/` is the support library every generated program imports. `rt.Value`, `rt.Int`, arithmetic, comparisons, built-ins.
-- `transpile/` walks a `pyc.Code` and emits Go source.
-- `cmd/gopygo/` is the CLI with `transpile`, `run`, and `version` subcommands.
-- `tests/fixtures/` is the golden-output test corpus.
+- `pyast/` is the frontend: an embedded Python helper that runs
+  `ast.parse` and emits JSON, plus a Go decoder and generic `Node`
+  walker.
+- `gen/` walks the AST and emits Go source.
+- `runtime/` is the support library every generated program imports.
+  `rt.Value`, arithmetic, comparisons, iteration, built-ins.
+- `cmd/gopygo/` is the CLI with `transpile`, `run`, and `version`
+  subcommands.
+- `tests/fixtures/` is the numbered fixture corpus with checked-in
+  transpiler output.
 
 ## Relationship to goipy
 
-[`goipy`](https://github.com/tamnd/goipy) is an interpreter for the same bytecode; it shares the interpretation loop but not the transpilation strategy. Use goipy when you want to load new `.pyc` at runtime without recompiling the host binary. Use gopygo when you want to ship Python logic as part of your Go build.
+[`goipy`](https://github.com/tamnd/goipy) is an interpreter for the
+same bytecode dialect; it walks `.pyc` one op at a time. gopygo
+takes the opposite bet: work from source, emit Go ahead of time,
+keep the output readable. Use goipy when you want to load new Python
+at runtime without recompiling. Use gopygo when you want Python
+logic as part of a Go build.
 
 ## License
 
-MIT. Bytecode input produced by CPython remains under the PSF license.
+MIT.
