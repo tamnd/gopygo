@@ -6,59 +6,44 @@ package main
 
 import (
 	"fmt"
-	"os"
-
-	rt "github.com/tamnd/gopygo/runtime"
+	"strconv"
+	"strings"
 )
 
-var globals = map[string]rt.Value{}
-
-func loadName(name string) rt.Value {
-	if v, ok := globals[name]; ok {
-		return v
+func main() {
+	var xs []int64 = []int64{1, 2, 3, 4, 5}
+	pyPrintln(int64(len(xs)))
+	pyPrintln(xs[0])
+	pyPrintln(xs[4])
+	var total int64 = 0
+	for _, x := range xs {
+		total = (total + x)
 	}
-	if v, ok := rt.Builtins[name]; ok {
-		return v
-	}
-	panic(fmt.Sprintf("NameError: name %q is not defined", name))
+	pyPrintln(total)
 }
 
-func main() {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintln(os.Stderr, r)
-			os.Exit(1)
+func pyRepr(v any) string {
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return "True"
 		}
-	}()
-	var total rt.Value
-	var v rt.Value
-	var xs rt.Value
-	xs = &rt.List{V: []rt.Value{rt.NewIntInt(1), rt.NewIntInt(2), rt.NewIntInt(3), rt.NewIntInt(4), rt.NewIntInt(5)}}
-	globals["xs"] = xs
-	_ = rt.Must(rt.Call(loadName("print"), xs))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("len"), xs))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.GetItem(xs, rt.NewIntInt(0)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.GetItem(xs, rt.Must(rt.Neg(rt.NewIntInt(1)))))))
-	total = rt.NewIntInt(0)
-	globals["total"] = total
-	{
-		_it1 := rt.MustIter(rt.GetIter(xs))
-		for {
-			_v, _ok := _it1.Next()
-			if !_ok {
-				break
-			}
-			v = _v
-			globals["v"] = v
-			total = rt.Must(rt.Add(total, v))
-			globals["total"] = total
+		return "False"
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatFloat(x, 'f', 1, 64)
 		}
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case string:
+		return x
 	}
-	_ = rt.Must(rt.Call(loadName("print"), total))
-	if err := rt.SetItem(xs, rt.NewIntInt(0), rt.NewIntInt(99)); err != nil {
-		panic(err)
+	return fmt.Sprint(v)
+}
+
+func pyPrintln(args ...any) {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = pyRepr(a)
 	}
-	_ = rt.Must(rt.Call(loadName("print"), xs))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Contains(xs, rt.NewIntInt(3)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Contains(xs, rt.NewIntInt(42)))))
+	fmt.Println(strings.Join(parts, " "))
 }

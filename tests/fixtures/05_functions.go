@@ -6,110 +6,46 @@ package main
 
 import (
 	"fmt"
-	"os"
-
-	rt "github.com/tamnd/gopygo/runtime"
+	"strconv"
+	"strings"
 )
 
-var globals = map[string]rt.Value{}
-
-func loadName(name string) rt.Value {
-	if v, ok := globals[name]; ok {
-		return v
-	}
-	if v, ok := rt.Builtins[name]; ok {
-		return v
-	}
-	panic(fmt.Sprintf("NameError: name %q is not defined", name))
+func add(a int64, b int64) int64 {
+	return (a + b)
 }
 
-var _fn_add = &rt.Func{Name: "add", Arity: 2, Impl: _impl_add}
-
-func _impl_add(_args []rt.Value) (rt.Value, error) {
-	if len(_args) != 2 {
-		return nil, rt.TypeError("add() takes 2 positional arguments but %d were given", len(_args))
-	}
-	a := _args[0]
-	b := _args[1]
-	_ = _args
-	return rt.Must(rt.Add(a, b)), nil
-	return rt.None, nil
-}
-
-var _fn_square = &rt.Func{Name: "square", Arity: 1, Impl: _impl_square}
-
-func _impl_square(_args []rt.Value) (rt.Value, error) {
-	if len(_args) != 1 {
-		return nil, rt.TypeError("square() takes 1 positional arguments but %d were given", len(_args))
-	}
-	x := _args[0]
-	_ = _args
-	return rt.Must(rt.Mul(x, x)), nil
-	return rt.None, nil
-}
-
-var _fn_sum_of_squares = &rt.Func{Name: "sum_of_squares", Arity: 1, Impl: _impl_sum_of_squares}
-
-func _impl_sum_of_squares(_args []rt.Value) (rt.Value, error) {
-	if len(_args) != 1 {
-		return nil, rt.TypeError("sum_of_squares() takes 1 positional arguments but %d were given", len(_args))
-	}
-	n := _args[0]
-	var i rt.Value
-	var total rt.Value
-	_ = _args
-	total = rt.NewIntInt(0)
-	{
-		_it1 := rt.MustIter(rt.GetIter(rt.Must(rt.Call(loadName("range"), n))))
-		for {
-			_v, _ok := _it1.Next()
-			if !_ok {
-				break
-			}
-			i = _v
-			total = rt.Must(rt.Add(total, rt.Must(rt.Call(loadName("square"), i))))
-		}
-	}
-	return total, nil
-	return rt.None, nil
-}
-
-var _fn_fact = &rt.Func{Name: "fact", Arity: 1, Impl: _impl_fact}
-
-func _impl_fact(_args []rt.Value) (rt.Value, error) {
-	if len(_args) != 1 {
-		return nil, rt.TypeError("fact() takes 1 positional arguments but %d were given", len(_args))
-	}
-	n := _args[0]
-	_ = _args
-	if rt.Truthy(rt.Must(rt.Compare(1, n, rt.NewIntInt(1)))) {
-		return rt.NewIntInt(1), nil
-	}
-	return rt.Must(rt.Mul(n, rt.Must(rt.Call(loadName("fact"), rt.Must(rt.Sub(n, rt.NewIntInt(1))))))), nil
-	return rt.None, nil
+func greet(name string) string {
+	return "hello, " + name
 }
 
 func main() {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintln(os.Stderr, r)
-			os.Exit(1)
+	pyPrintln(add(2, 3))
+	pyPrintln(add(10, -4))
+	pyPrintln(greet("alice"))
+}
+
+func pyRepr(v any) string {
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return "True"
 		}
-	}()
-	var add rt.Value
-	var fact rt.Value
-	var square rt.Value
-	var sum_of_squares rt.Value
-	add = _fn_add
-	globals["add"] = add
-	square = _fn_square
-	globals["square"] = square
-	sum_of_squares = _fn_sum_of_squares
-	globals["sum_of_squares"] = sum_of_squares
-	fact = _fn_fact
-	globals["fact"] = fact
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(add, rt.NewIntInt(2), rt.NewIntInt(3)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(square, rt.NewIntInt(7)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(sum_of_squares, rt.NewIntInt(5)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(fact, rt.NewIntInt(6)))))
+		return "False"
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatFloat(x, 'f', 1, 64)
+		}
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case string:
+		return x
+	}
+	return fmt.Sprint(v)
+}
+
+func pyPrintln(args ...any) {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = pyRepr(a)
+	}
+	fmt.Println(strings.Join(parts, " "))
 }

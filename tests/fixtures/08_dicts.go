@@ -6,52 +6,40 @@ package main
 
 import (
 	"fmt"
-	"os"
-
-	rt "github.com/tamnd/gopygo/runtime"
+	"strconv"
+	"strings"
 )
 
-var globals = map[string]rt.Value{}
-
-func loadName(name string) rt.Value {
-	if v, ok := globals[name]; ok {
-		return v
-	}
-	if v, ok := rt.Builtins[name]; ok {
-		return v
-	}
-	panic(fmt.Sprintf("NameError: name %q is not defined", name))
+func main() {
+	var ages map[string]int64 = map[string]int64{"alice": 30, "bob": 25}
+	pyPrintln(ages["alice"])
+	pyPrintln(ages["bob"])
+	ages["carol"] = 40
+	pyPrintln(int64(len(ages)))
 }
 
-func main() {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintln(os.Stderr, r)
-			os.Exit(1)
+func pyRepr(v any) string {
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return "True"
 		}
-	}()
-	var d rt.Value
-	var k rt.Value
-	d = rt.NewDictFromPairs(rt.NewStr("a"), rt.NewIntInt(1), rt.NewStr("b"), rt.NewIntInt(2))
-	globals["d"] = d
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.GetItem(d, rt.NewStr("a")))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.GetItem(d, rt.NewStr("b")))))
-	if err := rt.SetItem(d, rt.NewStr("c"), rt.NewIntInt(3)); err != nil {
-		panic(err)
-	}
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.GetItem(d, rt.NewStr("c")))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Contains(d, rt.NewStr("a")))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Contains(d, rt.NewStr("z")))))
-	{
-		_it1 := rt.MustIter(rt.GetIter(rt.NewTuple(rt.NewStr("a"), rt.NewStr("b"), rt.NewStr("c"))))
-		for {
-			_v, _ok := _it1.Next()
-			if !_ok {
-				break
-			}
-			k = _v
-			globals["k"] = k
-			_ = rt.Must(rt.Call(loadName("print"), k, rt.Must(rt.GetItem(d, k))))
+		return "False"
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatFloat(x, 'f', 1, 64)
 		}
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case string:
+		return x
 	}
+	return fmt.Sprint(v)
+}
+
+func pyPrintln(args ...any) {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = pyRepr(a)
+	}
+	fmt.Println(strings.Join(parts, " "))
 }

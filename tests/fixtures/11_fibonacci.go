@@ -6,106 +6,45 @@ package main
 
 import (
 	"fmt"
-	"os"
-
-	rt "github.com/tamnd/gopygo/runtime"
+	"strconv"
+	"strings"
 )
 
-var globals = map[string]rt.Value{}
-
-func loadName(name string) rt.Value {
-	if v, ok := globals[name]; ok {
-		return v
+func fib(n int64) int64 {
+	if n < 2 {
+		return n
 	}
-	if v, ok := rt.Builtins[name]; ok {
-		return v
-	}
-	panic(fmt.Sprintf("NameError: name %q is not defined", name))
-}
-
-var _fn_fib_rec = &rt.Func{Name: "fib_rec", Arity: 1, Impl: _impl_fib_rec}
-
-func _impl_fib_rec(_args []rt.Value) (rt.Value, error) {
-	if len(_args) != 1 {
-		return nil, rt.TypeError("fib_rec() takes 1 positional arguments but %d were given", len(_args))
-	}
-	n := _args[0]
-	_ = _args
-	if rt.Truthy(rt.Must(rt.Compare(0, n, rt.NewIntInt(2)))) {
-		return n, nil
-	}
-	return rt.Must(rt.Add(rt.Must(rt.Call(loadName("fib_rec"), rt.Must(rt.Sub(n, rt.NewIntInt(1))))), rt.Must(rt.Call(loadName("fib_rec"), rt.Must(rt.Sub(n, rt.NewIntInt(2))))))), nil
-	return rt.None, nil
-}
-
-var _fn_fib_iter = &rt.Func{Name: "fib_iter", Arity: 1, Impl: _impl_fib_iter}
-
-func _impl_fib_iter(_args []rt.Value) (rt.Value, error) {
-	if len(_args) != 1 {
-		return nil, rt.TypeError("fib_iter() takes 1 positional arguments but %d were given", len(_args))
-	}
-	n := _args[0]
-	var _ rt.Value
-	var a rt.Value
-	var b rt.Value
-	_ = _args
-	a = rt.NewIntInt(0)
-	b = rt.NewIntInt(1)
-	{
-		_it2 := rt.MustIter(rt.GetIter(rt.Must(rt.Call(loadName("range"), n))))
-		for {
-			_v, _ok := _it2.Next()
-			if !_ok {
-				break
-			}
-			_ = _v
-			_tv1 := func() []rt.Value {
-				_it := rt.MustIter(rt.GetIter(rt.NewTuple(b, rt.Must(rt.Add(a, b)))))
-				var xs []rt.Value
-				for {
-					v, ok := _it.Next()
-					if !ok {
-						break
-					}
-					xs = append(xs, v)
-				}
-				if len(xs) != 2 {
-					panic(rt.TypeError("unpack: expected 2, got %d", len(xs)))
-				}
-				return xs
-			}()
-			a = _tv1[0]
-			b = _tv1[1]
-		}
-	}
-	return a, nil
-	return rt.None, nil
+	return (fib((n - 1)) + fib((n - 2)))
 }
 
 func main() {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintln(os.Stderr, r)
-			os.Exit(1)
-		}
-	}()
-	var fib_iter rt.Value
-	var fib_rec rt.Value
-	var i rt.Value
-	fib_rec = _fn_fib_rec
-	globals["fib_rec"] = fib_rec
-	fib_iter = _fn_fib_iter
-	globals["fib_iter"] = fib_iter
-	{
-		_it3 := rt.MustIter(rt.GetIter(rt.Must(rt.Call(loadName("range"), rt.NewIntInt(10)))))
-		for {
-			_v, _ok := _it3.Next()
-			if !_ok {
-				break
-			}
-			i = _v
-			globals["i"] = i
-			_ = rt.Must(rt.Call(loadName("print"), i, rt.Must(rt.Call(fib_rec, i)), rt.Must(rt.Call(fib_iter, i))))
-		}
+	for i := int64(0); i < 10; i++ {
+		pyPrintln(fib(i))
 	}
+}
+
+func pyRepr(v any) string {
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return "True"
+		}
+		return "False"
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatFloat(x, 'f', 1, 64)
+		}
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case string:
+		return x
+	}
+	return fmt.Sprint(v)
+}
+
+func pyPrintln(args ...any) {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = pyRepr(a)
+	}
+	fmt.Println(strings.Join(parts, " "))
 }

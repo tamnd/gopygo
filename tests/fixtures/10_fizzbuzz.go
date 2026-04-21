@@ -6,49 +6,46 @@ package main
 
 import (
 	"fmt"
-	"os"
-
-	rt "github.com/tamnd/gopygo/runtime"
+	"strconv"
+	"strings"
 )
 
-var globals = map[string]rt.Value{}
-
-func loadName(name string) rt.Value {
-	if v, ok := globals[name]; ok {
-		return v
+func main() {
+	for i := int64(1); i < 16; i++ {
+		if (i % 15) == 0 {
+			pyPrintln("FizzBuzz")
+		} else if (i % 3) == 0 {
+			pyPrintln("Fizz")
+		} else if (i % 5) == 0 {
+			pyPrintln("Buzz")
+		} else {
+			pyPrintln(i)
+		}
 	}
-	if v, ok := rt.Builtins[name]; ok {
-		return v
-	}
-	panic(fmt.Sprintf("NameError: name %q is not defined", name))
 }
 
-func main() {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintln(os.Stderr, r)
-			os.Exit(1)
+func pyRepr(v any) string {
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return "True"
 		}
-	}()
-	var i rt.Value
-	{
-		_it1 := rt.MustIter(rt.GetIter(rt.Must(rt.Call(loadName("range"), rt.NewIntInt(1), rt.NewIntInt(21)))))
-		for {
-			_v, _ok := _it1.Next()
-			if !_ok {
-				break
-			}
-			i = _v
-			globals["i"] = i
-			if rt.Truthy(rt.Boxed(rt.Equal(rt.Must(rt.Mod(i, rt.NewIntInt(15))), rt.NewIntInt(0)))) {
-				_ = rt.Must(rt.Call(loadName("print"), rt.NewStr("FizzBuzz")))
-			} else if rt.Truthy(rt.Boxed(rt.Equal(rt.Must(rt.Mod(i, rt.NewIntInt(3))), rt.NewIntInt(0)))) {
-				_ = rt.Must(rt.Call(loadName("print"), rt.NewStr("Fizz")))
-			} else if rt.Truthy(rt.Boxed(rt.Equal(rt.Must(rt.Mod(i, rt.NewIntInt(5))), rt.NewIntInt(0)))) {
-				_ = rt.Must(rt.Call(loadName("print"), rt.NewStr("Buzz")))
-			} else {
-				_ = rt.Must(rt.Call(loadName("print"), i))
-			}
+		return "False"
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatFloat(x, 'f', 1, 64)
 		}
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case string:
+		return x
 	}
+	return fmt.Sprint(v)
+}
+
+func pyPrintln(args ...any) {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = pyRepr(a)
+	}
+	fmt.Println(strings.Join(parts, " "))
 }

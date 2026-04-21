@@ -6,44 +6,41 @@ package main
 
 import (
 	"fmt"
-	"os"
-
-	rt "github.com/tamnd/gopygo/runtime"
+	"strconv"
+	"strings"
 )
 
-var globals = map[string]rt.Value{}
-
-func loadName(name string) rt.Value {
-	if v, ok := globals[name]; ok {
-		return v
-	}
-	if v, ok := rt.Builtins[name]; ok {
-		return v
-	}
-	panic(fmt.Sprintf("NameError: name %q is not defined", name))
+func main() {
+	var name string = "world"
+	var greeting string = "hello, " + name
+	pyPrintln(greeting)
+	pyPrintln(int64(len(greeting)))
+	var n int64 = 42
+	pyPrintln(fmt.Sprintf("n = %d, greeting = %s", n, greeting))
 }
 
-func main() {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintln(os.Stderr, r)
-			os.Exit(1)
+func pyRepr(v any) string {
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return "True"
 		}
-	}()
-	var n rt.Value
-	var name rt.Value
-	var s rt.Value
-	s = rt.NewStr("hello")
-	globals["s"] = s
-	_ = rt.Must(rt.Call(loadName("print"), s))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Add(s, rt.NewStr(", world")))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("len"), s))))
-	name = rt.NewStr("gopygo")
-	globals["name"] = name
-	n = rt.NewIntInt(3)
-	globals["n"] = n
-	_ = rt.Must(rt.Call(loadName("print"), rt.ConcatStrings([]rt.Value{rt.Format(name), rt.NewStr(" says hi "), rt.Format(n), rt.NewStr(" times")})))
-	_ = rt.Must(rt.Call(loadName("print"), rt.ConcatStrings([]rt.Value{rt.NewStr("sum="), rt.Format(rt.Must(rt.Add(rt.NewIntInt(1), rt.NewIntInt(2))))})))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Compare(0, rt.NewStr("ab"), rt.NewStr("ac")))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Boxed(rt.Equal(rt.NewStr("abc"), rt.NewStr("abc")))))
+		return "False"
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatFloat(x, 'f', 1, 64)
+		}
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case string:
+		return x
+	}
+	return fmt.Sprint(v)
+}
+
+func pyPrintln(args ...any) {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = pyRepr(a)
+	}
+	fmt.Println(strings.Join(parts, " "))
 }

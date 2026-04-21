@@ -6,42 +6,46 @@ package main
 
 import (
 	"fmt"
-	"os"
-
-	rt "github.com/tamnd/gopygo/runtime"
+	"math"
+	"strconv"
+	"strings"
 )
 
-var globals = map[string]rt.Value{}
-
-func loadName(name string) rt.Value {
-	if v, ok := globals[name]; ok {
-		return v
-	}
-	if v, ok := rt.Builtins[name]; ok {
-		return v
-	}
-	panic(fmt.Sprintf("NameError: name %q is not defined", name))
+func main() {
+	var a int64 = 7
+	var b int64 = 3
+	pyPrintln((a + b))
+	pyPrintln((a - b))
+	pyPrintln((a * b))
+	pyPrintln((float64(a) / float64(b)))
+	pyPrintln((a / b))
+	pyPrintln((a % b))
+	pyPrintln(-a)
+	pyPrintln(int64(math.Pow(float64(2), float64(10))))
 }
 
-func main() {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintln(os.Stderr, r)
-			os.Exit(1)
+func pyRepr(v any) string {
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return "True"
 		}
-	}()
-	var x rt.Value
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Add(rt.NewIntInt(1), rt.NewIntInt(2)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Sub(rt.NewIntInt(10), rt.NewIntInt(3)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Mul(rt.NewIntInt(4), rt.NewIntInt(5)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.TrueDiv(rt.NewIntInt(10), rt.NewIntInt(4)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.FloorDiv(rt.NewIntInt(10), rt.NewIntInt(3)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Mod(rt.NewIntInt(10), rt.NewIntInt(3)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.FloorDiv(rt.Must(rt.Neg(rt.NewIntInt(7))), rt.NewIntInt(2)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Mod(rt.Must(rt.Neg(rt.NewIntInt(7))), rt.NewIntInt(2)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Pow(rt.NewIntInt(2), rt.NewIntInt(10)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Neg(rt.NewIntInt(3)))))
-	x = rt.Must(rt.Add(rt.NewIntInt(1), rt.Must(rt.Mul(rt.NewIntInt(2), rt.NewIntInt(3)))))
-	globals["x"] = x
-	_ = rt.Must(rt.Call(loadName("print"), x))
+		return "False"
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatFloat(x, 'f', 1, 64)
+		}
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case string:
+		return x
+	}
+	return fmt.Sprint(v)
+}
+
+func pyPrintln(args ...any) {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = pyRepr(a)
+	}
+	fmt.Println(strings.Join(parts, " "))
 }

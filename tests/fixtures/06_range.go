@@ -11,14 +11,15 @@ import (
 )
 
 func main() {
-	var x int64 = 5
-	var y int64 = 10
-	pyPrintln((x < y))
-	pyPrintln((x == y))
-	pyPrintln((x != y))
-	pyPrintln(((x >= 5) && (y <= 10)))
-	pyPrintln(((x > 0) || (y < 0)))
-	pyPrintln(!(x == y))
+	for i := int64(0); i < 5; i++ {
+		pyPrintln(i)
+	}
+	for j := int64(2); j < 6; j++ {
+		pyPrintln(j)
+	}
+	for k := int64(10); k > 0; k += -2 {
+		pyPrintln(k)
+	}
 }
 
 func pyRepr(v any) string {

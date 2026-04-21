@@ -10,15 +10,21 @@ import (
 	"strings"
 )
 
+func square(x int64) int64 {
+	return (x * x)
+}
+
+func sum_of_squares(n int64) int64 {
+	var total int64 = 0
+	for i := int64(1); i < (n + 1); i++ {
+		total = (total + square(i))
+	}
+	return total
+}
+
 func main() {
-	var x int64 = 5
-	var y int64 = 10
-	pyPrintln((x < y))
-	pyPrintln((x == y))
-	pyPrintln((x != y))
-	pyPrintln(((x >= 5) && (y <= 10)))
-	pyPrintln(((x > 0) || (y < 0)))
-	pyPrintln(!(x == y))
+	pyPrintln(sum_of_squares(10))
+	pyPrintln(sum_of_squares(100))
 }
 
 func pyRepr(v any) string {

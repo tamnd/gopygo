@@ -6,42 +6,77 @@ package main
 
 import (
 	"fmt"
-	"os"
-
-	rt "github.com/tamnd/gopygo/runtime"
+	"strconv"
+	"strings"
 )
 
-var globals = map[string]rt.Value{}
-
-func loadName(name string) rt.Value {
-	if v, ok := globals[name]; ok {
-		return v
-	}
-	if v, ok := rt.Builtins[name]; ok {
-		return v
-	}
-	panic(fmt.Sprintf("NameError: name %q is not defined", name))
+func main() {
+	pyPrintln(absInt(-7))
+	pyPrintln(absInt(3))
+	pyPrintln(minInt(3, 1, 4, 1, 5))
+	pyPrintln(maxInt(3, 1, 4, 1, 5))
+	pyPrintln(mustAtoi64("42"))
+	pyPrintln(float64(3))
+	pyPrintln(fmt.Sprint(100))
 }
 
-func main() {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintln(os.Stderr, r)
-			os.Exit(1)
+func absInt(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func minInt(xs ...int64) int64 {
+	m := xs[0]
+	for _, v := range xs[1:] {
+		if v < m {
+			m = v
 		}
-	}()
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("abs"), rt.Must(rt.Neg(rt.NewIntInt(5)))))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("abs"), rt.NewIntInt(3)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("min"), rt.NewIntInt(3), rt.NewIntInt(1), rt.NewIntInt(2)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("max"), rt.NewIntInt(3), rt.NewIntInt(1), rt.NewIntInt(2)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("min"), &rt.List{V: []rt.Value{rt.NewIntInt(5), rt.NewIntInt(2), rt.NewIntInt(8), rt.NewIntInt(1), rt.NewIntInt(9)}}))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("max"), &rt.List{V: []rt.Value{rt.NewIntInt(5), rt.NewIntInt(2), rt.NewIntInt(8), rt.NewIntInt(1), rt.NewIntInt(9)}}))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("str"), rt.NewIntInt(42)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("int"), rt.NewStr("123")))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("int"), rt.NewFloat(3.7)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("bool"), rt.NewIntInt(0)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("bool"), rt.NewIntInt(1)))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("bool"), rt.NewStr("")))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("bool"), rt.NewStr("x")))))
-	_ = rt.Must(rt.Call(loadName("print"), rt.Must(rt.Call(loadName("list"), rt.Must(rt.Call(loadName("range"), rt.NewIntInt(4)))))))
+	}
+	return m
+}
+
+func maxInt(xs ...int64) int64 {
+	m := xs[0]
+	for _, v := range xs[1:] {
+		if v > m {
+			m = v
+		}
+	}
+	return m
+}
+
+func mustAtoi64(s string) int64 {
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		panic("invalid literal for int(): " + s)
+	}
+	return n
+}
+
+func pyRepr(v any) string {
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return "True"
+		}
+		return "False"
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatFloat(x, 'f', 1, 64)
+		}
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case string:
+		return x
+	}
+	return fmt.Sprint(v)
+}
+
+func pyPrintln(args ...any) {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = pyRepr(a)
+	}
+	fmt.Println(strings.Join(parts, " "))
 }

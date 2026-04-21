@@ -1,7 +1,3 @@
-hello
 hello, world
-5
-gopygo says hi 3 times
-sum=3
-True
-True
+12
+n = 42, greeting = hello, world

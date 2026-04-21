@@ -1,10 +1,6 @@
-s = "hello"
-print(s)
-print(s + ", world")
-print(len(s))
-name = "gopygo"
-n = 3
-print(f"{name} says hi {n} times")
-print(f"sum={1+2}")
-print("ab" < "ac")
-print("abc" == "abc")
+name = "world"
+greeting = "hello, " + name
+print(greeting)
+print(len(greeting))
+n = 42
+print(f"n = {n}, greeting = {greeting}")
