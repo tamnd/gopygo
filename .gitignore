@@ -1,0 +1,28 @@
+# Build output
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# Go
+vendor/
+coverage.txt
+coverage.html
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python compile cache in tests
+__pycache__/
+*.pyc
+
+# Temp
+/tmp/
