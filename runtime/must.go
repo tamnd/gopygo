@@ -16,6 +16,15 @@ func Must(v Value, err error) Value {
 	return v
 }
 
+// MustIter is Must specialised for GetIter: returns *Iter rather than
+// a boxed Value so generated for-loops can call .Next directly.
+func MustIter(it *Iter, err error) *Iter {
+	if err != nil {
+		panic(err)
+	}
+	return it
+}
+
 // Not is the `not x` unary. Never fails.
 func Not(v Value) *Bool { return Boxed(!Truthy(v)) }
 
