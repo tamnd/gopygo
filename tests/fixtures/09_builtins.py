@@ -1,0 +1,7 @@
+print(abs(-7))
+print(abs(3))
+print(min(3, 1, 4, 1, 5))
+print(max(3, 1, 4, 1, 5))
+print(int("42"))
+print(float(3))
+print(str(100))
