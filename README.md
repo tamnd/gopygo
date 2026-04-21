@@ -10,8 +10,6 @@ If you only want to try the tool, jump to [Quick start](#quick-start).
 The rest of this file is a full walkthrough of how and why the
 project is built the way it is.
 
----
-
 ### Table of contents
 
 1. [Motivation](#motivation)
@@ -35,8 +33,6 @@ project is built the way it is.
 15. [FAQ](#faq)
 16. [A short history of the project](#a-short-history-of-the-project)
 17. [License](#license)
-
----
 
 ### Motivation
 
