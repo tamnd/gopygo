@@ -1,0 +1,9 @@
+{{.Indent}}{
+{{.Indent}}	{{.It}} := rt.MustIter(rt.GetIter({{.Iter}}))
+{{.Indent}}	for {
+{{.Indent}}		_v, _ok := {{.It}}.Next()
+{{.Indent}}		if !_ok {
+{{.Indent}}			break
+{{.Indent}}		}
+{{.Bind}}{{.Body}}{{.Indent}}	}
+{{.Indent}}}
